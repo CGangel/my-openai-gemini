@@ -11,7 +11,7 @@ export default {
       // 如果不是，则返回 426 状态码
       // HTTP 426 Upgrade Required 表示客户端应该切换到不同的协议。
       // 在这里我们用它来表示该路径不被支持，并暗示只有特定路径（如/v1beta）是有效的。
-      return new Response('Falie', {
+      return new Response('start genshin!', {
         status: 426,
         statusText: 'Upgrade Required'
       });
