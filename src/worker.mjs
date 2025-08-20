@@ -1,68 +1,114 @@
 import { Buffer } from "node:buffer";
 
 export default {
-  async fetch (request) {
-    if (request.method === "OPTIONS") {
-      return handleOPTIONS();
-    }
-    const errHandler = (err) => {
-      console.error(err);
-      return new Response(err.message, fixCors({ status: err.status ?? 500 }));
-    };
-    try {
-      const auth = request.headers.get("Authorization");
-      const apiKey = auth?.split(" ")[1];
-      const assert = (success) => {
-        if (!success) {
-          throw new HttpError("The specified HTTP method is not allowed for the requested resource", 400);
-        }
-      };
-      const { pathname } = new URL(request.url);
-      switch (true) {
-        case pathname.endsWith("/chat/completions"):
-          assert(request.method === "POST");
-          return handleCompletions(await request.json(), apiKey)
-            .catch(errHandler);
-        case pathname.endsWith("/embeddings"):
-          assert(request.method === "POST");
-          return handleEmbeddings(await request.json(), apiKey)
-            .catch(errHandler);
-        case pathname.endsWith("/models"):
-          assert(request.method === "GET");
-          return handleModels(apiKey)
-            .catch(errHandler);
-        default:
-          throw new HttpError("404 Not Found", 404);
-      }
-    } catch (err) {
-      return errHandler(err);
-    }
-  }
+  async fetch (request) {
+    if (request.method === "OPTIONS") {
+      return handleOPTIONS();
+    }
+    const errHandler = (err) => {
+      console.error(err);
+      return new Response(err.message, fixCors({ status: err.status ?? 500 }));
+    };
+    try {
+      const auth = request.headers.get("Authorization");
+      const apiKey = auth?.split(" ")[1];
+      const assert = (success) => {
+        if (!success) {
+          throw new HttpError("The specified HTTP method is not allowed for the requested resource", 400);
+        }
+      };
+      const { pathname } = new URL(request.url);
+      switch (true) {
+        // --- 新增的逻辑 START ---
+        // 判断是否为 Gemini 原生 API 调用路径
+        // 必须放在 .endsWith("/models") 前面，以获得更高优先级
+        case pathname.startsWith("/v1beta/models/"):
+          return handleDirectProxy(request).catch(errHandler);
+        // --- 新增的逻辑 END ---
+
+        case pathname.endsWith("/chat/completions"):
+          assert(request.method === "POST");
+          return handleCompletions(await request.json(), apiKey)
+            .catch(errHandler);
+        case pathname.endsWith("/embeddings"):
+          assert(request.method === "POST");
+          return handleEmbeddings(await request.json(), apiKey)
+            .catch(errHandler);
+        case pathname.endsWith("/models"):
+          assert(request.method === "GET");
+          return handleModels(apiKey)
+            .catch(errHandler);
+        default:
+          throw new HttpError("404 Not Found", 404);
+      }
+    } catch (err) {
+      return errHandler(err);
+    }
+  }
 };
 
 class HttpError extends Error {
-  constructor(message, status) {
-    super(message);
-    this.name = this.constructor.name;
-    this.status = status;
-  }
+  constructor(message, status) {
+    super(message);
+    this.name = this.constructor.name;
+    this.status = status;
+  }
 }
 
 const fixCors = ({ headers, status, statusText }) => {
-  headers = new Headers(headers);
-  headers.set("Access-Control-Allow-Origin", "*");
-  return { headers, status, statusText };
+  headers = new Headers(headers);
+  headers.set("Access-Control-Allow-Origin", "*");
+  return { headers, status, statusText };
 };
 
 const handleOPTIONS = async () => {
-  return new Response(null, {
-    headers: {
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "*",
-      "Access-Control-Allow-Headers": "*",
-    }
-  });
+  return new Response(null, {
+    headers: {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "*",
+      "Access-Control-Allow-Headers": "*",
+    }
+  });
 };
+
+// --- 新增的函数 START ---
+const handleDirectProxy = async (request) => {
+  const { pathname, search } = new URL(request.url);
+  const targetUrl = `${BASE_URL}${pathname}${search}`;
+
+  // 从原始请求中提取 API Key
+  // Gemini 原生 API 通过 x-goog-api-key header 验证
+  // 但我们为了统一，仍然从 Authorization header 获取
+  const auth = request.headers.get("Authorization");
+  const apiKey = auth?.split(" ")[1];
+
+  // 准备要转发的 headers
+  const forwardHeaders = new Headers(request.headers);
+
+  if (apiKey) {
+      forwardHeaders.set("x-goog-api-key", apiKey);
+      // 如果客户端同时发送了两种 key，优先使用我们设置的
+      forwardHeaders.delete("Authorization"); 
+  }
+  
+  // 添加固定的 client header，保持和适配器逻辑一致
+  forwardHeaders.set("x-goog-api-client", API_CLIENT);
+  // 让 fetch 自动处理 Host
+  forwardHeaders.delete("Host");
+
+  // 直接将请求体（body）和方法（method）等转发出去
+  const response = await fetch(targetUrl, {
+    method: request.method,
+    headers: forwardHeaders,
+    body: request.body,
+    duplex: 'half', // 在 Vercel Edge 环境中处理流式请求体时需要
+  });
+
+  // 直接返回从 Google 收到的响应，但附加我们自己的 CORS 头
+  return new Response(response.body, fixCors(response));
+};
+// --- 新增的函数 END ---
+
 
 const BASE_URL = "https://generativelanguage.googleapis.com";
 const API_VERSION = "v1beta";
