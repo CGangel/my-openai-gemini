@@ -69,9 +69,9 @@ which is necessary for continuous integration (CI).
 
 
 ## 注意
-api将仅代理/V1beta目录
-你可以通过/v1beta/openai/...调用
-也可以通过/v1beta/models/..（gemini默认调用方式）调用
+- api将仅代理/V1beta目录
+- 你可以通过/v1beta/openai/...调用
+- 也可以通过/v1beta/models/..（gemini默认调用方式）调用
 
 
 
