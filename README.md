@@ -41,17 +41,13 @@ which is necessary for continuous integration (CI).
 - Vercel _Functions_ [limitations](https://vercel.com/docs/functions/limitations) (with _Edge_ runtime)
 
 
-### Deploy to Netlify
+### 部署到Netlify（你猜我为什么只翻译这个？）
 
 [![Deploy to Netlify](https://www.netlify.com/img/deploy/button.svg)](https://app.netlify.com/start/deploy?repository=https://github.com/CGangel/my-openai-gemini&integrationName=integrationName&integrationSlug=integrationSlug&integrationDescription=integrationDescription)
 - Alternatively can be deployed with [cli](https://docs.netlify.com/cli/get-started/):
   `netlify deploy`
 - Serve locally: `netlify dev`
-- Two different api bases provided:
-  - `/v1` (e.g. `/v1/chat/completions` endpoint)  
-    _Functions_ [limits](https://docs.netlify.com/functions/get-started/?fn-language=js#synchronous-function-2)
-  - `/edge/v1`  
-    _Edge functions_ [limits](https://docs.netlify.com/edge-functions/limits/)
+
 
 
 ### Deploy to Cloudflare
